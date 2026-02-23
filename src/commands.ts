@@ -1,5 +1,5 @@
-import { setUser } from "./config.js";
-import { createUser, getUserByName, deleteAllUsers } from "./lib/db/queries/users.js";
+import { setUser, readConfig } from "./config.js";
+import { createUser, getUserByName, deleteAllUsers, getUsers } from "./lib/db/queries/users.js";
 
 type CommandHandler = (cmdName: string, ...args: string[]) => Promise<void>;
 
@@ -50,4 +50,23 @@ export async function handlerRegister(cmdName: string, ...args: string[]) {
 export async function handlerReset(cmdName: string, ...args: string[]) {
   await deleteAllUsers();
   console.log("database reset!");
+}
+
+export async function handlerUsers(cmdName: string, ...args: string[]) {
+  const config = readConfig();
+  const allUsers = await getUsers();
+  for (const user of allUsers) {
+    if (user.name === config.currentUserName) {
+      console.log(`* ${user.name} (current)`);
+    } else {
+      console.log(`* ${user.name}`);
+    }
+  }
+}
+
+import { fetchFeed } from "./rss.js";
+
+export async function handlerAgg(cmdName: string, ...args: string[]) {
+  const feed = await fetchFeed("https://www.wagslane.dev/index.xml");
+  console.log(feed);
 }
