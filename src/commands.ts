@@ -70,3 +70,27 @@ export async function handlerAgg(cmdName: string, ...args: string[]) {
   const feed = await fetchFeed("https://www.wagslane.dev/index.xml");
   console.log(JSON.stringify(feed, null, 2));
 }
+
+import { createFeed } from "./lib/db/queries/feeds.js";
+import type { Feed, User } from "./lib/db/schema.js";
+
+function printFeed(feed: Feed, user: User) {
+  console.log(`id: ${feed.id}`);
+  console.log(`name: ${feed.name}`);
+  console.log(`url: ${feed.url}`);
+  console.log(`user: ${user.name}`);
+}
+
+export async function handlerAddFeed(cmdName: string, ...args: string[]) {
+  if (args.length < 2) {
+    throw new Error("addfeed requires a name and a url");
+  }
+  const config = readConfig();
+  const user = await getUserByName(config.currentUserName!);
+  if (!user) {
+    throw new Error("current user not found, please login first");
+  }
+  const [name, url] = args;
+  const feed = await createFeed(name, url, user.id);
+  printFeed(feed, user);
+}
