@@ -71,7 +71,7 @@ export async function handlerAgg(cmdName: string, ...args: string[]) {
   console.log(JSON.stringify(feed, null, 2));
 }
 
-import { createFeed } from "./lib/db/queries/feeds.js";
+import { createFeed, getFeedsWithUsers } from "./lib/db/queries/feeds.js";
 import type { Feed, User } from "./lib/db/schema.js";
 
 function printFeed(feed: Feed, user: User) {
@@ -93,4 +93,14 @@ export async function handlerAddFeed(cmdName: string, ...args: string[]) {
   const [name, url] = args;
   const feed = await createFeed(name, url, user.id);
   printFeed(feed, user);
+}
+
+export async function handlerFeeds(cmdName: string, ...args: string[]) {
+  const feedsWithUsers = await getFeedsWithUsers();
+  for (const f of feedsWithUsers) {
+    console.log(`name: ${f.feedName}`);
+    console.log(`url: ${f.feedUrl}`);
+    console.log(`user: ${f.userName}`);
+    console.log("---");
+  }
 }
