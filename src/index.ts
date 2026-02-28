@@ -1,4 +1,4 @@
-import { registerCommand, runCommand, handlerLogin, handlerRegister, handlerReset, handlerUsers, handlerAgg, handlerAddFeed, handlerFeeds } from "./commands.js";
+import { registerCommand, runCommand, handlerLogin, handlerRegister, handlerReset, handlerUsers, handlerAgg, handlerAddFeed, handlerFeeds, handlerFollow, handlerFollowing, middlewareLoggedIn } from "./commands.js";
 
 async function main() {
   const registry: { [key: string]: any } = {};
@@ -8,16 +8,12 @@ async function main() {
   registerCommand(registry, "reset", handlerReset);
   registerCommand(registry, "users", handlerUsers);
   registerCommand(registry, "agg", handlerAgg);
-  registerCommand(registry, "addfeed", handlerAddFeed);
   registerCommand(registry, "feeds", handlerFeeds);
-  registerCommand(registry, "reset", handlerReset);
-  registerCommand(registry, "users", handlerUsers);
-  registerCommand(registry, "agg", handlerAgg);
-  registerCommand(registry, "addfeed", handlerAddFeed);
-  registerCommand(registry, "feeds", handlerFeeds);
+  registerCommand(registry, "addfeed", middlewareLoggedIn(handlerAddFeed));
+  registerCommand(registry, "follow", middlewareLoggedIn(handlerFollow));
+  registerCommand(registry, "following", middlewareLoggedIn(handlerFollowing));
 
   const args = process.argv.slice(2);
-
   if (args.length === 0) {
     console.log("not enough arguments");
     process.exit(1);

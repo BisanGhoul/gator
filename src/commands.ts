@@ -1,7 +1,12 @@
 import { setUser, readConfig } from "./config.js";
 import { createUser, getUserByName, deleteAllUsers, getUsers } from "./lib/db/queries/users.js";
+import { fetchFeed } from "./rss.js";
+import { createFeed, getFeedsWithUsers, getFeedByUrl } from "./lib/db/queries/feeds.js";
+import { createFeedFollow, getFeedFollowsForUser } from "./lib/db/queries/feedFollows.js";
+import type { Feed, User } from "./lib/db/schema.js";
 
 type CommandHandler = (cmdName: string, ...args: string[]) => Promise<void>;
+type UserCommandHandler = (cmdName: string, user: User, ...args: string[]) => Promise<void>;
 
 type CommandsRegistry = {
   [key: string]: CommandHandler;
@@ -19,28 +24,31 @@ export async function runCommand(registry: CommandsRegistry, cmdName: string, ..
   await handler(cmdName, ...args);
 }
 
+export function middlewareLoggedIn(handler: UserCommandHandler): CommandHandler {
+  return async (cmdName: string, ...args: string[]) => {
+    const config = readConfig();
+    const user = await getUserByName(config.currentUserName!);
+    if (!user) {
+      throw new Error("not logged in, please login first");
+    }
+    await handler(cmdName, user, ...args);
+  };
+}
+
 export async function handlerLogin(cmdName: string, ...args: string[]) {
-  if (args.length === 0) {
-    throw new Error("login requires a username");
-  }
+  if (args.length === 0) throw new Error("login requires a username");
   const username = args[0];
   const user = await getUserByName(username);
-  if (!user) {
-    throw new Error(`user ${username} does not exist`);
-  }
+  if (!user) throw new Error(`user ${username} does not exist`);
   setUser(username);
   console.log(`logged in as ${username}`);
 }
 
 export async function handlerRegister(cmdName: string, ...args: string[]) {
-  if (args.length === 0) {
-    throw new Error("register requires a username");
-  }
+  if (args.length === 0) throw new Error("register requires a username");
   const username = args[0];
   const existing = await getUserByName(username);
-  if (existing) {
-    throw new Error(`user ${username} already exists`);
-  }
+  if (existing) throw new Error(`user ${username} already exists`);
   const user = await createUser(username);
   setUser(username);
   console.log(`user created!`);
@@ -64,35 +72,18 @@ export async function handlerUsers(cmdName: string, ...args: string[]) {
   }
 }
 
-import { fetchFeed } from "./rss.js";
-
 export async function handlerAgg(cmdName: string, ...args: string[]) {
   const feed = await fetchFeed("https://www.wagslane.dev/index.xml");
   console.log(JSON.stringify(feed, null, 2));
 }
 
-import { createFeed, getFeedsWithUsers } from "./lib/db/queries/feeds.js";
-import type { Feed, User } from "./lib/db/schema.js";
-
-function printFeed(feed: Feed, user: User) {
-  console.log(`id: ${feed.id}`);
-  console.log(`name: ${feed.name}`);
-  console.log(`url: ${feed.url}`);
-  console.log(`user: ${user.name}`);
-}
-
-export async function handlerAddFeed(cmdName: string, ...args: string[]) {
-  if (args.length < 2) {
-    throw new Error("addfeed requires a name and a url");
-  }
-  const config = readConfig();
-  const user = await getUserByName(config.currentUserName!);
-  if (!user) {
-    throw new Error("current user not found, please login first");
-  }
+export async function handlerAddFeed(cmdName: string, user: User, ...args: string[]) {
+  if (args.length < 2) throw new Error("addfeed requires a name and a url");
   const [name, url] = args;
   const feed = await createFeed(name, url, user.id);
-  printFeed(feed, user);
+  const follow = await createFeedFollow(user.id, feed.id);
+  console.log(`name: ${follow.feedName}`);
+  console.log(`user: ${follow.userName}`);
 }
 
 export async function handlerFeeds(cmdName: string, ...args: string[]) {
@@ -102,5 +93,22 @@ export async function handlerFeeds(cmdName: string, ...args: string[]) {
     console.log(`url: ${f.feedUrl}`);
     console.log(`user: ${f.userName}`);
     console.log("---");
+  }
+}
+
+export async function handlerFollow(cmdName: string, user: User, ...args: string[]) {
+  if (args.length === 0) throw new Error("follow requires a url");
+  const url = args[0];
+  const feed = await getFeedByUrl(url);
+  if (!feed) throw new Error(`feed not found: ${url}`);
+  const follow = await createFeedFollow(user.id, feed.id);
+  console.log(`name: ${follow.feedName}`);
+  console.log(`user: ${follow.userName}`);
+}
+
+export async function handlerFollowing(cmdName: string, user: User, ...args: string[]) {
+  const follows = await getFeedFollowsForUser(user.id);
+  for (const f of follows) {
+    console.log(`* ${f.feedName}`);
   }
 }
