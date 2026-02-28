@@ -2,7 +2,7 @@ import { setUser, readConfig } from "./config.js";
 import { createUser, getUserByName, deleteAllUsers, getUsers } from "./lib/db/queries/users.js";
 import { fetchFeed } from "./rss.js";
 import { createFeed, getFeedsWithUsers, getFeedByUrl } from "./lib/db/queries/feeds.js";
-import { createFeedFollow, getFeedFollowsForUser } from "./lib/db/queries/feedFollows.js";
+import { createFeedFollow, getFeedFollowsForUser, deleteFeedFollowByUrl } from "./lib/db/queries/feedFollows.js";
 import type { Feed, User } from "./lib/db/schema.js";
 
 type CommandHandler = (cmdName: string, ...args: string[]) => Promise<void>;
@@ -111,4 +111,11 @@ export async function handlerFollowing(cmdName: string, user: User, ...args: str
   for (const f of follows) {
     console.log(`* ${f.feedName}`);
   }
+}
+
+export async function handlerUnfollow(cmdName: string, user: User, ...args: string[]) {
+  if (args.length === 0) throw new Error("unfollow requires a url");
+  const url = args[0];
+  await deleteFeedFollowByUrl(user.id, url);
+  console.log(`unfollowed ${url}`);
 }
