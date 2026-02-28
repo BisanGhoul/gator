@@ -1,7 +1,7 @@
 import { setUser, readConfig } from "./config.js";
 import { createUser, getUserByName, deleteAllUsers, getUsers } from "./lib/db/queries/users.js";
 import { fetchFeed } from "./rss.js";
-import { createFeed, getFeedsWithUsers, getFeedByUrl } from "./lib/db/queries/feeds.js";
+import { createFeed, getFeedsWithUsers, getFeedByUrl, markFeedFetched, getNextFeedToFetch } from "./lib/db/queries/feeds.js";
 import { createFeedFollow, getFeedFollowsForUser, deleteFeedFollowByUrl } from "./lib/db/queries/feedFollows.js";
 import type { Feed, User } from "./lib/db/schema.js";
 
@@ -72,9 +72,48 @@ export async function handlerUsers(cmdName: string, ...args: string[]) {
   }
 }
 
+function parseDuration(durationStr: string): number {
+  const regex = /^(\d+)(ms|s|m|h)$/;
+  const match = durationStr.match(regex);
+  if (!match) throw new Error(`invalid duration: ${durationStr}`);
+  const value = parseInt(match[1]);
+  const unit = match[2];
+  if (unit === "ms") return value;
+  if (unit === "s") return value * 1000;
+  if (unit === "m") return value * 60 * 1000;
+  if (unit === "h") return value * 60 * 60 * 1000;
+  throw new Error(`unknown unit: ${unit}`);
+}
+
+async function scrapeFeeds() {
+  const feed = await getNextFeedToFetch();
+  if (!feed) return;
+  console.log(`Fetching feed: ${feed.url}`);
+  await markFeedFetched(feed.id);
+  const rssFeed = await fetchFeed(feed.url);
+  for (const item of rssFeed.channel.item) {
+    console.log(`  - ${item.title}`);
+  }
+}
+
 export async function handlerAgg(cmdName: string, ...args: string[]) {
-  const feed = await fetchFeed("https://www.wagslane.dev/index.xml");
-  console.log(JSON.stringify(feed, null, 2));
+  if (args.length === 0) throw new Error("agg requires a time_between_reqs argument");
+  const timeBetweenRequests = parseDuration(args[0]);
+  console.log(`Collecting feeds every ${args[0]}`);
+
+  scrapeFeeds().catch(console.error);
+
+  const interval = setInterval(() => {
+    scrapeFeeds().catch(console.error);
+  }, timeBetweenRequests);
+
+  await new Promise<void>((resolve) => {
+    process.on("SIGINT", () => {
+      console.log("Shutting down feed aggregator...");
+      clearInterval(interval);
+      resolve();
+    });
+  });
 }
 
 export async function handlerAddFeed(cmdName: string, user: User, ...args: string[]) {
